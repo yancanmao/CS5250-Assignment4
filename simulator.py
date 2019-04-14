@@ -57,51 +57,74 @@ def RR_scheduling(process_list, time_quantum):
     proc_length = len(process_list)
 
     while isCompleted < proc_length:
+        allocated_list = []
         # a quantum end, read all arrived processes to the tail of ready queue
         for process in process_list:
             if current_time >= process.arrive_time:
                 ready_queue.append(process)
-                process_list.remove(process)
+                allocated_list.append(process)
+                # process_list.remove(process)
                 logging.debug("ready_queue info: %s", ready_queue)
                 logging.info("process: [%s, %s, %s] -- append to the queue.", process.id, process.arrive_time, process.burst_time)
                 logging.debug("cur waiting time: %s, cur time: %s", waiting_time, current_time)
-                # print(process)
-                # print(" -- append to the queue.")
                 waiting_time = waiting_time + (current_time - process.arrive_time)
+
         # an extreme case, ready queue is null? later process arrive at future
         if not ready_queue:
             current_time = process_list[first].arrive_time
             for process in process_list:
                 if current_time == process.arrive_time:
                     ready_queue.append(process)
-                    process_list.remove(process)
+                    # process_list.remove(process)
+                    if process not in allocated_list:
+                        allocated_list.append(process)
+
+        for process in allocated_list:
+            if process in process_list:
+                process_list.remove(process)
+        allocated_list = []
+
         # RR read the first process in the ready queue, process it with a quantum
         cur_process = ready_queue[first]
+        ready_queue.remove(cur_process)
+
         schedule.append((current_time,cur_process.id))
         
         if cur_process.burst_time <= time_quantum:
             current_time = current_time + cur_process.burst_time
             # remove completed process from ready_queue, and complete ++
-            ready_queue.remove(cur_process)
             isCompleted = isCompleted + 1
             waiting_time = waiting_time + len(ready_queue) * cur_process.burst_time
             logging.debug("ready_queue info: %s", ready_queue)
             logging.info("process: [%s, %s, %s]  -- Completed! cur_time: %s", cur_process.id, cur_process.arrive_time, cur_process.burst_time, current_time)
-            # print(cur_process)
-            # print(" -- Completed! cur_time: %s" % current_time)
         else:
             # append to the tail of ready queue
             current_time = current_time + time_quantum
             # compute the remaining time of cur_process
             cur_process.burst_time = cur_process.burst_time - time_quantum
-            ready_queue.remove(cur_process)
-            ready_queue.append(cur_process)
+
             waiting_time = waiting_time + len(ready_queue) * time_quantum
+
+            # a quantum end, read all arrived processes to the tail of ready queue
+            for process in process_list:
+                if current_time >= process.arrive_time:
+                    ready_queue.append(process)
+                    # process_list.remove(process)
+                    if process not in allocated_list:
+                        allocated_list.append(process)
+                    logging.debug("ready_queue info: %s", ready_queue)
+                    logging.info("process: [%s, %s, %s] -- append to the queue.", process.id, process.arrive_time, process.burst_time)
+                    logging.debug("cur waiting time: %s, cur time: %s", waiting_time, current_time)
+                    waiting_time = waiting_time + (current_time - process.arrive_time)
+
+            ready_queue.append(cur_process)
             logging.debug("ready_queue info: %s", ready_queue)
             logging.info("process: [%s, %s, %s]  -- a quantum processed. cur_time: %s", cur_process.id, cur_process.arrive_time, cur_process.burst_time, current_time)
-            # print(cur_process)
-            # print(" -- a quantum processed. cur_time: %s" % current_time)
-            
+        # remove allocated processes from process_list
+        for process in allocated_list:
+            if process in process_list:
+                process_list.remove(process)
+
     average_waiting_time = waiting_time/float(proc_length)
     return schedule, average_waiting_time
 
@@ -221,11 +244,14 @@ def SJF_scheduling(process_list, alpha):
     prev_act_time = dict.fromkeys(pid_set, 0)
 
     while isCompleted < proc_length:
+        allocated_list = []
         # Current process completed, append arrived process to the ready_queue
         for process in process_list:
             if current_time >= process.arrive_time:
                 ready_queue.append(process)
-                process_list.remove(process)
+                # process_list.remove(process)
+                if process not in allocated_list:
+                    allocated_list.append(process)
                 waiting_time = waiting_time + (current_time - process.arrive_time)
                 print(process)
                 print(" -- append to the queue. cur_time: %s" % current_time)
@@ -236,16 +262,24 @@ def SJF_scheduling(process_list, alpha):
             for process in process_list:
                 if current_time == process.arrive_time:
                     ready_queue.append(process)
-                    process_list.remove(process)
+                    # process_list.remove(process)
+                    if process not in allocated_list:
+                        allocated_list.append(process)
+
+        for process in allocated_list:
+            if process in process_list:
+                process_list.remove(process)
+
+        allocated_list = []
 
         # find shortest process in ready queue, update the shortest process prev esti time
         smallest_burst_time = 10000
         for ready_process in ready_queue:
-            # if prev_act_time[ready_process.id] == 0:
-                # est_time = prev_est_time[ready_process.id]
-            est_time = cur_process.burst_time * alpha + (1 - alpha) * prev_est_time[ready_process.id]
-            # else:
-            #     est_time = prev_act_time[ready_process.id] * alpha + (1 - alpha) * prev_est_time[ready_process.id]
+            if prev_act_time[ready_process.id] == 0:
+                est_time = prev_est_time[ready_process.id]
+            # est_time = cur_process.burst_time * alpha + (1 - alpha) * prev_est_time[ready_process.id]
+            else:
+                est_time = prev_act_time[ready_process.id] * alpha + (1 - alpha) * prev_est_time[ready_process.id]
             if est_time < smallest_burst_time:
                 smallest_burst_time = est_time
                 cur_process = ready_process
@@ -258,6 +292,10 @@ def SJF_scheduling(process_list, alpha):
         isCompleted = isCompleted + 1
         print(cur_process)
         print(" -- Completed! prev_est_time: %s, prev_act_time: %s, cur_time: %s" % (cur_process.burst_time ,smallest_burst_time , current_time))
+        # remove allocated processes from process_list
+        for process in allocated_list:
+            if process in process_list:
+                process_list.remove(process)
 
     average_waiting_time = waiting_time/float(proc_length)
     return schedule, average_waiting_time
@@ -287,21 +325,54 @@ def main(argv):
     print ("printing input ----")
     for process in process_list:
         print (process)
-    print ("simulating FCFS ----")
-    FCFS_schedule, FCFS_avg_waiting_time =  FCFS_scheduling(process_list)
-    write_output('FCFS.txt', FCFS_schedule, FCFS_avg_waiting_time )
-    print ("simulating RR ----")
-    process_list = read_input()
-    RR_schedule, RR_avg_waiting_time =  RR_scheduling(process_list,time_quantum = 2)
-    write_output('RR.txt', RR_schedule, RR_avg_waiting_time )
-    print ("simulating SRTF ----")
-    process_list = read_input()
-    SRTF_schedule, SRTF_avg_waiting_time =  SRTF_scheduling(process_list)
-    write_output('SRTF.txt', SRTF_schedule, SRTF_avg_waiting_time )
-    print ("simulating SJF ----")
-    process_list = read_input()
-    SJF_schedule, SJF_avg_waiting_time =  SJF_scheduling(process_list, alpha = 0.5)
-    write_output('SJF.txt', SJF_schedule, SJF_avg_waiting_time )
+    # print ("simulating FCFS ----")
+    # FCFS_schedule, FCFS_avg_waiting_time =  FCFS_scheduling(process_list)
+    # write_output('FCFS.txt', FCFS_schedule, FCFS_avg_waiting_time )
+
+    # print ("simulating RR ----")
+    # process_list = read_input()
+    # RR_schedule, RR_avg_waiting_time =  RR_scheduling(process_list,time_quantum=2)
+    # write_output('RR.txt', RR_schedule, RR_avg_waiting_time)
+
+    # find optimal time quantum
+    # minimum_RR_avg_waiting_time = 10000
+    # minimum_RR_schedule = []
+    # minimum_time_quantum = 0
+    # for time_quantum in range(1, 11):
+    #     print ("simulating RR ----")
+    #     process_list = read_input()
+    #     RR_schedule, RR_avg_waiting_time =  RR_scheduling(process_list,time_quantum)
+    #     if RR_avg_waiting_time < minimum_RR_avg_waiting_time:
+    #         minimum_RR_avg_waiting_time = RR_avg_waiting_time
+    #         minimum_RR_schedule = RR_schedule
+    #         minimum_time_quantum = time_quantum
+    # print("minimum time quantum: %s" % minimum_time_quantum)
+    # write_output('RR.txt', minimum_RR_schedule, minimum_RR_avg_waiting_time)
+
+    # print ("simulating SRTF ----")
+    # process_list = read_input()
+    # SRTF_schedule, SRTF_avg_waiting_time =  SRTF_scheduling(process_list)
+    # write_output('SRTF.txt', SRTF_schedule, SRTF_avg_waiting_time )
+
+    # print ("simulating SJF ----")
+    # process_list = read_input()
+    # SJF_schedule, SJF_avg_waiting_time =  SJF_scheduling(process_list, alpha = 0.5)
+    # write_output('SJF.txt', SJF_schedule, SJF_avg_waiting_time )
+
+    # find optimal alpha
+    minimum_SJF_avg_waiting_time = 10000
+    minimum_SJF_schedule = []
+    minimum_alpha = 0.0
+    for alpha in range(0, 11):
+        print("simulating SJF ----")
+        process_list = read_input()
+        SJF_schedule, SJF_avg_waiting_time = SJF_scheduling(process_list, alpha/float(10))
+        if SJF_avg_waiting_time < minimum_SJF_avg_waiting_time:
+            minimum_SJF_avg_waiting_time = SJF_avg_waiting_time
+            minimum_SJF_schedule = SJF_schedule
+            minimum_alpha = alpha/float(10)
+        print("minimum alpha: %s" % minimum_alpha)
+        write_output('SJF.txt', minimum_SJF_schedule, minimum_SJF_avg_waiting_time)
 
 
 if __name__ == '__main__':
